@@ -1,4 +1,6 @@
 # Please download from the ufcscrapR-data repo first
+https://www.github.com/pranavherur/ufcscrapR-data 
+
 Then clone this repo at the same level
 
 ex:
