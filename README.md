@@ -3,14 +3,14 @@ https://www.github.com/pranavherur/ufcscrapR-data
 
 Then clone this repo at the same level
 
-ex:
-    project_folder
-        |-- ufcscrapR-date
-        |-- ufcscrapR
+ex:\
+project_folder\
+        |---- ufcscrapR-data\
+        |---- ufcscrapR
 
 
-example usage
-will check for crawled fights and minimize to new only (full fight crawl takes 5 hours)
+example usage\
+will check for crawled fights and minimize to new only (full fight crawl takes 5 hours)\
 also checks that fights have happened before today
 
 start = timer()\
