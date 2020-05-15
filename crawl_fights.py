@@ -46,9 +46,9 @@ def crawl_fights(df):
 			.to_csv("ufcscrapR-data/fight_list.csv", index=False)
 
 		# order fight_stats columns for writing to disk
-		df = clean_fight_df(pd.DataFrame(columns=totals_cols + ["fight_id"], data=totals_rows))
+		df = clean_fight_df(pd.DataFrame(columns=totals_cols + ["fight_id", "w"], data=totals_rows))
 		ordered_cols = [
-			"fight_id", "fighter", "kd", "sig_str_landed", "sig_str_attempted", "signif_str_rate",
+			"fight_id", "fighter", "w", "kd", "sig_str_landed", "sig_str_attempted", "signif_str_rate",
 			"total_strikes_landed",
 			"total_strikes_attempted", "sub_att", "pass", "rev", "takedown_landed", "takedown_attempted", "td_rate",
 			"head_landed", "head_attempted", "body_landed", "body_attempted", "leg_landed", "leg_attempted",
@@ -58,9 +58,9 @@ def crawl_fights(df):
 			.to_csv("ufcscrapR-data/fight_stats.csv", index=False)
 
 		# order rbr columns for writing to disk
-		df = clean_fight_df(pd.DataFrame(columns=per_round_cols + signif_add_on_cols[1:] + ["round", "fight_id"], data=per_round_rows))
+		df = clean_fight_df(pd.DataFrame(columns=per_round_cols + signif_add_on_cols[1:] + ["round", "fight_id", "w"], data=per_round_rows))
 		ordered_cols = [
-			"fight_id", "fighter", "round", "kd", "sig_str_landed", "sig_str_attempted", "signif_str_rate",
+			"fight_id", "fighter", "w", "round", "kd", "sig_str_landed", "sig_str_attempted", "signif_str_rate",
 			"total_strikes_landed",
 			"total_strikes_attempted", "sub_att", "pass", "rev", "takedown_landed", "takedown_attempted", "td_rate",
 			"head_landed", "head_attempted", "body_landed", "body_attempted", "leg_landed", "leg_attempted",
@@ -108,11 +108,22 @@ def split_row(row, crawl_row):
 def split_combined_rows(gen_totals_df, signif_totals_df, crawl_row):
 	a, b = split_row(gen_totals_df.iloc[0], crawl_row)
 	a1, b1 = split_row(signif_totals_df.iloc[0], crawl_row)
+	# skip duplicate name column
 	a.extend(a1[1:])
 	b.extend(b1[1:])
+
+	# add fight_id
 	a.append(crawl_row.fight_id)
 	b.append(crawl_row.fight_id)
+
+	# mark winner
+	a.append(if_winner(a1[0], crawl_row))
+	b.append(if_winner(b1[0], crawl_row))
 	return [a, b]
+
+
+def if_winner(name, crawl_row):
+	return "W" if name == crawl_row.winner else "L"
 
 
 def create_per_round(gen_per_round, signif_per_round, crawl_row):
@@ -142,6 +153,10 @@ def create_per_round(gen_per_round, signif_per_round, crawl_row):
 		a.append(crawl_row.fight_id)
 		b.append(crawl_row.fight_id)
 
+		# mark winner
+		a.append(if_winner(a1[0], crawl_row))
+		b.append(if_winner(b1[0], crawl_row))
+
 		# add to rows
 		rows.append(a)
 		rows.append(b)
@@ -153,7 +168,7 @@ def build_fight_details_row(fight_id, html):
 	soup = BeautifulSoup(html, 'html.parser')
 	fight_name = soup.find_all('i', class_="b-fight-details__fight-title")[0].text.strip()
 	fight_constants = {}
-	for i, tag in enumerate(soup.find_all('i', class_="b-fight-details__text-item")[:4]):
+	for tag in soup.find_all('i', class_="b-fight-details__text-item")[:4]:
 		a = tag.find('i').text.strip()
 		fight_constants[a[:-1]] = tag.text.strip().replace(a, "").strip()
 
