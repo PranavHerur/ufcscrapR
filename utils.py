@@ -31,3 +31,12 @@ def get_max_crawled_date():
 	else:
 		return datetime.strptime("November 12, 1993", "%B %d, %Y")
 
+
+def get_max_fight_id():
+	if os.path.isfile("ufcscrapR-data/fight_list.csv"):
+		df = pd.read_csv("ufcscrapR-data/fight_list.csv")
+		df.date = pd.to_datetime(df.date)
+		return df.fight_id.max()
+	else:
+		return 0
+

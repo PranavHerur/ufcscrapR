@@ -5,7 +5,8 @@ from datetime import datetime
 import pandas as pd
 from bs4 import BeautifulSoup
 
-from .utils import get_url, unique_urls, get_event_urls, get_max_crawled_date
+from ufcscrapR.crawl_fights import crawl_fights
+from .utils import get_url, unique_urls, get_event_urls, get_max_crawled_date, get_max_fight_id
 
 
 def crawl_fighters():
@@ -15,10 +16,14 @@ def crawl_fighters():
 
 	# maintain order for duplicate links
 	df["url"] = unique_urls(p.findall(html))
+	df["full_name"] = df.apply(lambda r: r.First + " " + r.Last, axis=1)
+	df.rename(columns={"Ht.": "height", "Wt.": "weight"}, inplace=True)
+	df.rename(columns={c: c.casefold() for c in list(df)}, inplace=True)
 
 	print(df.head().to_string())
 	print(df.shape)
-	df.to_csv("ufcscrapR-data/fighters.csv", index=False)
+	ordered_cols = ["first","last","full_name","nickname","height","weight","reach","stance","w","l","d","url"]
+	df[ordered_cols].to_csv("ufcscrapR-data/fighters.csv", index=False)
 
 
 def crawl_event_list():
@@ -79,8 +84,11 @@ def crawl_events():
 		time.sleep(5)
 
 	if fight_list.shape[0] > 0:
+		print(fight_list.head().to_string())
+		print(fight_list.shape)
+
 		# assign fight_id
-		fight_list["fight_id"] = [i for i in range(fight_list.shape[0], 0, -1)]
+		fight_list["fight_id"] = [i for i in range(fight_list.shape[0]+get_max_fight_id(), get_max_fight_id(), -1)]
 		fight_list.rename(columns={"Weight class": "weight_class", "Method": "method"}, inplace=True)
 		fight_list["win_by"] = fight_list.apply(lambda r: r.method.split("  ")[0], axis=1)
 		fight_list["method"] = fight_list.apply(lambda r: clean_method(r), axis=1)
@@ -115,18 +123,17 @@ def build_fights_from_raw(raw_df):
 	ordered_cols = ['event_id', 'fight_id', 'fighter', "w", 'str', 'td', 'sub', 'pass', 'weight_class', 'win_by', 'method',
 					'round', 'time', 'date', 'location', 'attendance', 'event_name', 'url']
 	print(fights[ordered_cols].head().to_string())
-	fights[ordered_cols].to_csv("ufcscrapR-data/fights_per_fighter.csv", index=False)
+	pd.concat([fights[ordered_cols], pd.read_csv("ufcscrapR-data/fights_per_fighter.csv")])\
+		.to_csv("ufcscrapR-data/fights_per_fighter.csv", index=False)
 
 	# write to disk
 	# 1 fight per line
 	fight_list = pd.DataFrame(columns=["winner", "loser", "weight_class", "win_by", *list(raw_df)[7:-1]],
-							  data=([*row.Fighter.split("  "), row.weight_class, row.win_by, row.method,
-									 *row[list(raw_df)[8:-1]].values] for _, row in raw_df.iterrows())
-							  )
+		data=([*row.Fighter.split("  "), row.weight_class, row.win_by, row.method, *row[list(raw_df)[8:-1]].values] for _, row in raw_df.iterrows()))
 	fight_list.rename(columns={c: c.casefold() for c in list(fight_list)}, inplace=True)
 	ordered_cols = ['event_id', 'fight_id', 'winner', 'loser', 'weight_class', 'win_by', 'method', 'round', 'time',
 					'date', 'location', 'attendance', 'event_name', 'url']
 	print(fight_list[ordered_cols].head().to_string())
-	fight_list[ordered_cols].to_csv("ufcscrapR-data/fight_list.csv", index=False)
+	crawl_fights(fight_list[ordered_cols])
 
 

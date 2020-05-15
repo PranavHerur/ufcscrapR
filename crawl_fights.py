@@ -9,9 +9,8 @@ totals_cols = [
 	'Fighter', 'KD', 'Sig. str.', 'Sig. str. %', 'Total str.', 'Td', 'Td %', 'Sub. att', 'Pass', 'Rev.',
 	'Head', 'Body', 'Leg', 'Distance', 'Clinch', 'Ground']
 signif_add_on_cols = ['Fighter', 'Head', 'Body', 'Leg', 'Distance', 'Clinch', 'Ground']
-def crawl_fights():
+def crawl_fights(df):
 	totals_rows, per_round_rows, fight_details = [], [], []
-	df = pd.read_csv("ufcscrapR-data/fight_list.csv")
 	df.date = pd.to_datetime(df.date)
 
 	for _, crawl_row in df.query("'{0}' < date".format(get_max_crawled_date())).iterrows():
@@ -32,24 +31,46 @@ def crawl_fights():
 			print(e)
 
 	if totals_rows:
+		# update & order columns for fight_list
 		fight_details_cols = [
 			"fight_id", "fight_name", "round", "time", "time_format", "referee", "title_fight",
 			"fight_of_night", "performance_bonus"
 		]
 		df1 = pd.DataFrame(columns=fight_details_cols, data=fight_details)
-		df2 = pd.read_csv("ufcscrapR-data/fight_list.csv")
-		df2 = df2[["fight_id"] + list(set(list(df2)).difference(df1))]
-		df1.merge(df2, how="inner", on="fight_id").to_csv("ufcscrapR-data/fight_list.csv", index=False)
+		df = df[["fight_id"] + list(set(list(df)).difference(df1))]
+		ordered_cols = [
+			"fight_id","event_id","date","weight_class","winner","loser","win_by","method","round","time",
+			"time_format","title_fight","fight_of_night","performance_bonus","fight_name","referee","attendance",
+			"location","event_name","url"]
+		pd.concat([df1.merge(df, how="inner", on="fight_id")[ordered_cols], pd.read_csv("ufcscrapR-data/fight_list.csv")]) \
+			.to_csv("ufcscrapR-data/fight_list.csv", index=False)
 
-		totals_df = pd.DataFrame(columns=totals_cols + ["fight_id"], data=totals_rows)
-		clean_fight_df(totals_df, "fight_stats.csv")
+		# order fight_stats columns for writing to disk
+		df = clean_fight_df(pd.DataFrame(columns=totals_cols + ["fight_id"], data=totals_rows))
+		ordered_cols = [
+			"fight_id", "fighter", "kd", "sig_str_landed", "sig_str_attempted", "signif_str_rate",
+			"total_strikes_landed",
+			"total_strikes_attempted", "sub_att", "pass", "rev", "takedown_landed", "takedown_attempted", "td_rate",
+			"head_landed", "head_attempted", "body_landed", "body_attempted", "leg_landed", "leg_attempted",
+			"distance_landed",
+			"distance_attempted", "clinch_landed", "clinch_attempted", "ground_landed", "ground_attempted"]
+		pd.concat([df[ordered_cols], pd.read_csv("ufcscrapR-data/fight_stats.csv")]) \
+			.to_csv("ufcscrapR-data/fight_stats.csv", index=False)
 
-		per_round_df = pd.DataFrame(columns=per_round_cols + signif_add_on_cols[1:] + ["round", "fight_id"],
-									data=per_round_rows)
-		clean_fight_df(per_round_df, "rbr.csv")
+		# order rbr columns for writing to disk
+		df = clean_fight_df(pd.DataFrame(columns=per_round_cols + signif_add_on_cols[1:] + ["round", "fight_id"], data=per_round_rows))
+		ordered_cols = [
+			"fight_id", "fighter", "round", "kd", "sig_str_landed", "sig_str_attempted", "signif_str_rate",
+			"total_strikes_landed",
+			"total_strikes_attempted", "sub_att", "pass", "rev", "takedown_landed", "takedown_attempted", "td_rate",
+			"head_landed", "head_attempted", "body_landed", "body_attempted", "leg_landed", "leg_attempted",
+			"distance_landed",
+			"distance_attempted", "clinch_landed", "clinch_attempted", "ground_landed", "ground_attempted"]
+		pd.concat([df[ordered_cols], pd.read_csv("ufcscrapR-data/rbr.csv")]) \
+			.to_csv("ufcscrapR-data/rbr.csv", index=False)
 
 
-def clean_fight_df(df, fname):
+def clean_fight_df(df):
 	df.rename(columns={"Sig. str.": "sig_str","Total str.": "total_strikes", "Td": "takedown"}, inplace=True)
 	cols = ["sig_str", "total_strikes", "takedown", "Head", "Body", "Leg", "Distance", "Clinch", "Ground"]
 
@@ -60,48 +81,13 @@ def clean_fight_df(df, fname):
 
 	for col in ["Sig. str. %", "Td %"]:
 		df[col] = df.apply(lambda r: int(r[col][:-1])/100, axis=1)
-
+	df.rename(columns={"Sig. str. %": "signif_str_rate","Td %": "td_rate","Sub. att":"sub_att","Rev.": "rev"}, inplace=True)
 	df.drop(columns=cols, inplace=True)
+	df.rename(columns={c: c.casefold() for c in list(df)}, inplace=True)
+
 
 	print(df.head().to_string())
-	df.to_csv("ufcscrapR-data/"+fname, index=False)
-
-
-def build_fights_from_raw(raw_df):
-	# split columns
-	dupe_cols = list(raw_df)[8:-1]
-	split_cols = list(raw_df)[1:6]
-	split_rows = []
-	for i, row in raw_df.iterrows():
-		# some columns get read as a single row
-		winner, loser = [], []
-		for col in split_cols:
-			fw, fl = row[col].split("  ")
-			winner.append(fw)
-			loser.append(fl)
-
-		split_rows.append(["W", *winner, row.weight_class, row.win_by, row.method, *row[dupe_cols].values])
-		split_rows.append(["L", *loser, row.weight_class, row.win_by, row.method, *row[dupe_cols].values])
-
-	# write 1 fighter per line
-	fights = pd.DataFrame(columns=["W", *split_cols, "weight_class", "win_by", *list(raw_df)[7:-1]], data=split_rows)
-	fights.rename(columns={c: c.casefold() for c in list(fights)}, inplace=True)
-	ordered_cols = ['event_id', 'fight_id', 'fighter', "w", 'str', 'td', 'sub', 'pass', 'weight_class', 'win_by', 'method',
-					'round', 'time', 'date', 'location', 'attendance', 'event_name', 'url']
-	print(fights[ordered_cols].head().to_string())
-	fights[ordered_cols].to_csv("ufcscrapR-data/fights_per_fighter.csv", index=False)
-
-	# write to disk
-	# 1 fight per line
-	fight_list = pd.DataFrame(columns=["winner", "loser", "weight_class", "win_by", *list(raw_df)[7:-1]],
-							  data=([*row.Fighter.split("  "), row.weight_class, row.win_by, row.method,
-									 *row[list(raw_df)[8:-1]].values] for _, row in raw_df.iterrows())
-							  )
-	fight_list.rename(columns={c: c.casefold() for c in list(fight_list)}, inplace=True)
-	ordered_cols = ['event_id', 'fight_id', 'winner', 'loser', 'weight_class', 'win_by', 'method', 'round', 'time',
-					'date', 'location', 'attendance', 'event_name', 'url']
-	print(fight_list[ordered_cols].head().to_string())
-	fight_list[ordered_cols].to_csv("ufcscrapR-data/fight_list.csv", index=False)
+	return df
 
 
 def split_row(row, crawl_row):
