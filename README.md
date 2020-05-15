@@ -20,6 +20,5 @@ from ufcscrapR.crawl_fights import crawl_fights
 crawl_fighters()\
 crawl_event_list()\
 crawl_events()\
-crawl_fights()
 
 print(round(timer() - start, 2), "seconds")
